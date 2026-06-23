@@ -1,23 +1,38 @@
+import json
+import os
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import numpy as np
 
 app = Flask(__name__)
 
-# --- Load ratings once at startup ---
 ratings_df = pd.read_csv("wcData/ratings.csv")[['team', 'rating']]
 ratings_dict = dict(zip(ratings_df['team'], ratings_df['rating']))
 
-# --- Simulation logic ---
+
+def load_divisor(default=400):
+    path = "wcData/calibration.json"
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)["divisor"]
+    print("WARNING: wcData/calibration.json not found, using uncalibrated default 400")
+    return default
+
+
+DIVISOR = load_divisor()
+
+
 def win_probability(rating_a, rating_b):
     diff = rating_a - rating_b
-    return 1 / (1 + 10 ** (-diff / 400))
+    return 1 / (1 + 10 ** (-diff / DIVISOR))
+
 
 def simulate_match(team_a, team_b):
     r_a = ratings_dict.get(team_a, 1500)
     r_b = ratings_dict.get(team_b, 1500)
     p_a = win_probability(r_a, r_b)
     return team_a if np.random.random() < p_a else team_b
+
 
 def simulate_bracket(teams):
     current_round = teams[:]
@@ -36,6 +51,7 @@ def simulate_bracket(teams):
 
     return results
 
+
 def monte_carlo(teams, n=10000):
     totals = {team: {'R16': 0, 'QF': 0, 'SF': 0, 'F': 0, 'W': 0} for team in teams}
     for _ in range(n):
@@ -51,11 +67,12 @@ def monte_carlo(teams, n=10000):
         }
     return probs
 
-# --- Routes ---
+
 @app.route('/')
 def index():
     teams = sorted(ratings_dict.keys())
     return render_template('index.html', teams=teams)
+
 
 @app.route('/simulate', methods=['POST'])
 def simulate():
@@ -71,6 +88,7 @@ def simulate():
 
     probs = monte_carlo(bracket)
     return jsonify(probs)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

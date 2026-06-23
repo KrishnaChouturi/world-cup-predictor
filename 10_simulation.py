@@ -1,12 +1,27 @@
+import json
+import os
 import pandas as pd
 import numpy as np
 
 ratings = pd.read_csv("wcData/ratings.csv")[['team', 'rating']]
 
-# Got probability formula from chess ratings calculation and other elo games
+
+def load_divisor(default=400):
+    path = "wcData/calibration.json"
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)["divisor"]
+    print("WARNING: wcData/calibration.json not found, using uncalibrated default 400")
+    return default
+
+
+DIVISOR = load_divisor()
+
+
 def win_probability(rating_a, rating_b):
     diff = rating_a - rating_b
-    return 1 / (1 + 10 ** (-diff / 400))
+    return 1 / (1 + 10 ** (-diff / DIVISOR))
+
 
 def simulate_match(team_a, team_b, ratings_dict):
     r_a = ratings_dict[team_a]
@@ -14,9 +29,7 @@ def simulate_match(team_a, team_b, ratings_dict):
     p_a = win_probability(r_a, r_b)
     return team_a if np.random.random() < p_a else team_b
 
-# Simulate full knockout bracket
-# Teams must be ordered as they appear in the bracket (matched pairs)
-# e.g. [t1 vs t2, t3 vs t4, t5 vs t6, ...]
+
 def simulate_bracket(teams, ratings_dict):
     current_round = teams[:]
     results = {team: {'R32': 0, 'R16': 0, 'QF': 0, 'SF': 0, 'F': 0, 'W': 0} for team in teams}
@@ -34,6 +47,7 @@ def simulate_bracket(teams, ratings_dict):
 
     return results
 
+
 def monte_carlo(teams, ratings_dict, n=10000):
     totals = {team: {'R16': 0, 'QF': 0, 'SF': 0, 'F': 0, 'W': 0} for team in teams}
 
@@ -49,8 +63,8 @@ def monte_carlo(teams, ratings_dict, n=10000):
 
     return probs
 
+
 # --- Input your Round of 32 bracket here ---
-# Order matters: position 0 plays position 1, position 2 plays position 3, etc.
 bracket = [
     'Argentina', 'Australia',
     'France', 'Morocco',
